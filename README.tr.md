@@ -1,78 +1,113 @@
-# Makine Öğrenmesi Tabanlı Kişiselleştirilmiş Film Öneri Sistemi
+# Makine Ogrenmesi Tabanli Kisisellestirilmis Film Oneri Sistemi
 
 [Read in English](README.md)
 
-TÜBİTAK 2209-A projesi kapsamında React Native mobil uygulama, Python/FastAPI backend ve SQLite veritabanı kullanan hibrit bir film öneri sistemi.
+Bu proje, React Native / Expo mobil uygulamasi ve Python FastAPI backend'i kullanan prototip bir hibrit film oneri sistemidir. Sistem, kullanici puanlari ile film icerik ozelliklerini birlestirerek kisisellestirilmis top-N film onerileri uretir.
 
-![screenshot](docs/screenshot.png)
-
-## Problem ve Motivasyon
-
-Bu proje, cold-start ve öneri kalitesi sorununu kullanıcı davranışı ve içerik benzerliğini birleştiren hibrit bir modelle çözmeyi amaçlar. Amacımız, kullanıcı/film benzerliği ve benzer kullanıcı davranışlarını ağırlıklı denklemle birleştirerek akademik bir bağlamda top-10 öneri üretimini göstermek.
+Kaynak kod yayinina hazirlik icin yerel SQLite verisi repoya dahil edilmez. `backend/recsys.db` yerelde olusturulur veya saglanir ve git'e eklenmemelidir.
 
 ## Mimari
 
 ```mermaid
 flowchart LR
-    Mobile["Mobil Uygulama (React Native)"] -->|API istekleri| Backend["Backend (FastAPI)"]
-    Backend -->|okur/yazar| Database["SQLite Veritabanı"]
-    Backend -->|kullanır| Hybrid["Hibrit Öneri Motoru"]
-    CF["İşbirlikçi Filtreleme (SVD)"] --> Hybrid
-    Content["İçerik Tabanlı Filtreleme"] --> Hybrid
-    Hybrid -->|puanlar| Backend
+    Mobile["Mobil uygulama\nReact Native / Expo"] -->|HTTP API| API["Backend API\nFastAPI"]
+    API --> DB["Yerel SQLite\nbackend/recsys.db"]
+    API --> Hybrid["Hibrit oneri motoru"]
+    CF["Isbirlikci filtreleme\nSVD"] --> Hybrid
+    Content["Icerik tabanli model\nfilm metadata benzerligi"] --> Hybrid
+    Hybrid --> API
 ```
 
-## Teknolojiler
+## Dosya Yapisi
 
-- React Native / Expo
-- FastAPI
-- Python
-- SQLite
-- Scikit-learn
-- Pandas
-- SQLAlchemy
+- `backend/` - FastAPI uygulamasi, SQLite yardimcilari, SVD modeli, icerik modeli, hibrit skor hesaplama ve backend bagimliliklari.
+- `mobile/` - Expo uygulamasi; giris/kayit, cold-start anketi, ana sayfa onerileri, kaydirma geri bildirimi ve admin analiz ekranlari.
+- `docs/` - Proje anlatimi ve teknik dokumantasyon.
+- `.env.example` - Ornek yerel calisma ayarlari.
+- `.github/workflows/ci.yml` - CI eklendikten sonra temel GitHub Actions akisi.
 
-## Kurulum ve Çalıştırma
+## Oneri Yaklasimi
 
-### Backend
+Backend uc sinyali egitir ve birlestirir:
 
-```bash
+- Isbirlikci filtreleme: `backend/cf_svd.py`, puanlardan SVD tabanli kullanici-film sinyali uretir.
+- Icerik tabanli filtreleme: `backend/content_v2.py`, film metadata vektorleri ve kullanici profilleri olusturur.
+- Hibrit skor: `backend/hibrit.py`, isbirlikci skor, icerik skoru ve populerlik skorunu agirlikli olarak birlestirir. Cold-start kullanicilarda anket cevaplarinin etkisi daha yuksektir.
+
+Prototip degerlendirme sonuclari:
+
+| Yaklasim | Recall@20 |
+| --- | ---: |
+| Hibrit | 63.29% |
+| Icerik tabanli | 20.00% |
+| Isbirlikci filtreleme | 15.47% |
+
+## Gereksinimler
+
+- Python 3.11 veya daha yeni
+- Node.js 20 veya daha yeni
+- npm
+- Expo ile uyumlu Android/iOS cihaz, emulator veya web hedefi
+
+## Backend Kurulumu
+
+```powershell
 cd backend
 python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Bos bir klondan basliyorsaniz yerel SQLite semasini olusturun:
+
+```powershell
+python -c "from db_schema import initialize_database; initialize_database()"
+```
+
+API'yi calistirmadan once `backend/recsys.db` icinde uyumlu `movies`, `ratings` ve `users` verilerinin bulunmasi gerekir. API acilista oneri modellerini egitir; bu nedenle bos veritabani sadece sema olusturmak icin yeterlidir, gercek oneri uretmez.
+
+API'yi calistirin:
+
+```powershell
 uvicorn api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Mobil
+Yararli endpoint'ler:
 
-```bash
+- `GET /survey-movies?n=10`
+- `GET /check-user?user_id=1`
+- `GET /recommend-user?user_id=1&n_recs=10`
+- `POST /recommend-from-ratings?n_recs=10`
+- `GET /admin/analytics`
+- `GET /admin/inspect-user?user_id=1`
+- `POST /register`
+- `POST /login`
+
+## Mobil Kurulum
+
+```powershell
 cd mobile
 npm install
 npm start
 ```
 
-## Örnek Kullanım ve Cold-Start
+Gercek cihazla test etmeden once backend adresini `mobile/src/config.js` icinde ayarlayin. Android emulator `http://10.0.2.2:8000` adresini kullanabilir; fiziksel cihazlar bilgisayarin yerel ag IP adresine ihtiyac duyar.
 
-1. Mobil uygulamayı açın ve 20 filmlik anketi tamamlayın.
-2. Uygulama puanları backend’e gönderir.
-3. Backend hibrit model kullanarak top-10 öneri listesi üretir.
-4. Kullanıcı kişiselleştirilmiş film önerilerini görür.
+## Hizli Calistirma
 
-## Deneysel Sonuçlar
+1. Yerel ve doldurulmus bir `backend/recsys.db` hazirlayin. Bu dosyayi git disinda tutun.
+2. `backend/` klasorunden `uvicorn api:app --reload --host 0.0.0.0 --port 8000` komutuyla backend'i baslatin.
+3. `mobile/` klasorunden `npm start` komutuyla mobil uygulamayi baslatin.
+4. Uygulamada kayit olun veya giris yapin, cold-start anketini tamamlayin ve ana sayfadaki gunluk oneri kartlarini goruntuleyin.
 
-| Yaklaşım | Recall@20 |
-|---|---|
-| Hibrit | 63.29% |
-| İçerik Tabanlı | 20.00% |
-| İşbirlikçi Filtreleme | 15.47% |
+## Paketleme Notlari
 
-## Bilinen Sınırlamalar
-
-- SQLite ve yerel dosyalar kullanır; üretim ölçeğine uygun değildir.
-- Cold-start, ilk anket verisinin kalitesine bağlıdır.
-- Dağıtım ve ölçeklenebilirlik altyapısı içermez.
+- `*.db`, `recsys.db` ve `backend/recsys.db` git disinda tutulur.
+- `mobile/package-lock.json`, tekrarlanabilir npm kurulumu icin takip edilir.
+- `.env.example` dokumantasyon amaciyla takip edilir; mevcut backend kodu SQLite yolu icin `backend/db_helper.py` dosyasini kullanir.
+- Proje prototiptir; uretim veri yukleme, hosted altyapi veya secret yonetimi icermez.
 
 ## Lisans
 
-MIT Lisansı
+MIT. Ayrinti icin [LICENSE](LICENSE) dosyasina bakin.
